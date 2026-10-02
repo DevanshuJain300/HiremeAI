@@ -35,7 +35,7 @@ function App() {
       setLoadingQuestions(true);
 
       const response = await fetch(
-        "http://127.0.0.1:8000/interview-questions",
+        "https://hiremeai-backend-mm0t.onrender.com/interview-questions",
         {
           method: "POST",
           headers: {
@@ -93,7 +93,7 @@ function App() {
   useEffect(() => {
   async function checkBackend() {
     try {
-      const response = await fetch("http://127.0.0.1:8000/");
+      const response = await fetch("https://hiremeai-backend-mm0t.onrender.com/");
 
       setBackendOnline(response.ok);
     } catch (error) {
@@ -115,7 +115,7 @@ function App() {
       setCandidateLoading(true);
       setCandidateError(false);
 
-      const response = await fetch("http://127.0.0.1:8000/candidate");
+      const response = await fetch("https://hiremeai-backend-mm0t.onrender.com/candidate");
 
       if (!response.ok) {
         throw new Error("Failed to fetch candidate");
@@ -154,7 +154,7 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/chat", {
+      const response = await fetch("https://hiremeai-backend-mm0t.onrender.com/chat", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
