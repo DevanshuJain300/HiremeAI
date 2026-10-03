@@ -1,12 +1,13 @@
 import json
 import os
 from pathlib import Path
+import uuid
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 
@@ -47,7 +48,7 @@ class Experience(BaseModel):
     role: str | None = None
     duration: str | None = None
     description: str | None = None
-    skills_used: list[str] = []
+    skills_used: list[str] = Field(default_factory=list)
 
 
 class Resume(BaseModel):
@@ -57,11 +58,11 @@ class Resume(BaseModel):
 
     total_experience_years: float | None = None
 
-    skills: list[str] = []
-    experiences: list[Experience] = []
-    education: list[str] = []
-    projects: list[str] = []
-    certifications: list[str] = []
+    skills: list[str] = Field(default_factory=list)
+    experiences: list[Experience] = Field(default_factory=list)
+    education: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
 
 
 resume_schema = Resume.model_json_schema()
@@ -78,7 +79,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
-    history: list[ChatMessage] = []
+    history: list[ChatMessage] = Field(default_factory=list)
     mode: str = "HR Interview"
 
 
@@ -434,39 +435,59 @@ def read_pdf(file_path: Path):
     return text
 
 
-# --------------------------------------------------
-# LOAD RESUME
-# --------------------------------------------------
 
-def load_resume():
-
-    pdf_path = (
-        Path(__file__).resolve().parent
-        / "InternshipExpResume.pdf"
-    )
-
-    resume_text = read_pdf(pdf_path)
-
-    return parse_resume(resume_text)
 
 
 # --------------------------------------------------
 # GLOBAL RESUME
 # --------------------------------------------------
 
-resume = None
+# Store resumes separately for each HR session
+sessions = {}
 
 
-# --------------------------------------------------
-# STARTUP
-# --------------------------------------------------
-
-@app.on_event("startup")
-def startup_event():
+@app.post("/upload-resume")
+async def upload_resume(file: UploadFile = File(...)):
 
     global resume
 
-    resume = load_resume()
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF resumes are supported."
+        )
+
+    contents = await file.read()
+
+    temp_path = Path("uploaded_resume.pdf")
+    temp_path.write_bytes(contents)
+
+    try:
+        resume_text = read_pdf(temp_path)
+
+        if not resume_text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text from the PDF."
+            )
+
+        parsed_resume = parse_resume(resume_text)
+
+        # Create a unique session for this HR
+        session_id = str(uuid.uuid4())
+
+        sessions[session_id] = parsed_resume
+
+        return {
+            "message": "Resume uploaded successfully",
+            "session_id": session_id,
+            "candidate": parsed_resume.model_dump()
+        }
+
+    finally:
+
+        if temp_path.exists():
+            temp_path.unlink()
 
 
 # --------------------------------------------------
@@ -486,9 +507,15 @@ def home():
 # --------------------------------------------------
 
 @app.get("/candidate")
-def get_candidate():
+def get_candidate(session_id: str):
 
-    return resume.model_dump()
+    if session_id not in sessions:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found. Please upload a resume."
+        )
+
+    return sessions[session_id].model_dump()
 
 
 # --------------------------------------------------
@@ -496,11 +523,19 @@ def get_candidate():
 # --------------------------------------------------
 
 @app.post("/chat")
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, session_id: str):
+
+    if session_id not in sessions:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found. Please upload a resume."
+        )
+
+    candidate_resume = sessions[session_id]
 
     answer = ask_candidate(
         request.question,
-        resume,
+        candidate_resume,
         request.history,
         request.mode
     )
@@ -515,11 +550,22 @@ def chat(request: ChatRequest):
 # --------------------------------------------------
 
 @app.post("/interview-questions")
-def interview_questions(request: QuestionRequest):
+def interview_questions(
+    request: QuestionRequest,
+    session_id: str
+):
+
+    if session_id not in sessions:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found. Please upload a resume."
+        )
+
+    candidate_resume = sessions[session_id]
 
     questions = generate_interview_questions(
         request.mode,
-        resume
+        candidate_resume
     )
 
     return {

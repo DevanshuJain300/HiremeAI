@@ -18,9 +18,112 @@ import {
 
 import "./App.css";
 
+
+const uploadResume = async (file) => {
+
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+
+    setLoading(true);
+
+    const response = await fetch(
+      "https://hiremeai-backend-mm0t.onrender.com/upload-resume",
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Resume upload failed");
+    }
+
+    // Save this HR's session
+    setSessionId(data.session_id);
+
+    console.log("Candidate loaded:", data.candidate);
+
+    // Load suggested questions for this candidate
+    await loadSuggestedQuestions(data.session_id);
+
+  } catch (error) {
+
+    console.error("Resume upload error:", error);
+
+  } finally {
+
+    setLoading(false);
+
+  }
+};
+
+
+<div className="mb-6">
+  <label className="mb-2 block text-sm font-medium text-slate-300">
+    Upload Candidate Resume
+  </label>
+
+  <input
+    type="file"
+    accept=".pdf"
+    onChange={(e) => uploadResume(e.target.files[0])}
+    className="block w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-slate-300"
+  />
+</div>
+
+
+const loadSuggestedQuestions = async (id = sessionId) => {
+  if (!id) return;
+
+  try {
+    setLoadingQuestions(true);
+
+    const response = await fetch(
+      `https://hiremeai-backend-mm0t.onrender.com/interview-questions?session_id=${id}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: interviewMode,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Failed to generate questions");
+    }
+
+    setSuggestedQuestions(data.questions || []);
+
+  } catch (error) {
+    console.error("Question generation error:", error);
+    setSuggestedQuestions([]);
+  } finally {
+    setLoadingQuestions(false);
+  }
+};
+
+
+useEffect(() => {
+  if (sessionId) {
+    loadSuggestedQuestions(sessionId);
+  }
+}, [interviewMode, sessionId]);
+
 function App() {
   const [interviewMode, setInterviewMode] = useState("HR Interview");
   const [interviewStarted, setInterviewStarted] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
   const [interviewQuestions, setInterviewQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [candidate, setCandidate] = useState(null);
@@ -30,42 +133,11 @@ function App() {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
 
-  const generateQuestions = async () => {
-    try {
-      setLoadingQuestions(true);
+  
 
-      const response = await fetch(
-        "https://hiremeai-backend-mm0t.onrender.com/interview-questions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            mode: interviewMode,
-          }),
-        }
-      );
+     
 
-      if (!response.ok) {
-        throw new Error("Failed to generate interview questions");
-      }
-
-      const data = await response.json();
-
-      setSuggestedQuestions(data.questions || []);
-    } catch (error) {
-      console.error("Error generating questions:", error);
-      setSuggestedQuestions([]);
-    } finally {
-      setLoadingQuestions(false);
-    }
-  };
-
-  // Generate new suggested questions whenever interview mode changes
-  useEffect(() => {
-    generateQuestions();
-  }, [interviewMode]);
+ 
 
   const [messages, setMessages] = useState([
     {
