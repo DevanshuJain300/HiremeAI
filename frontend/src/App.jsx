@@ -18,6 +18,9 @@ import {
 
 import "./App.css";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
+
 
 const uploadResume = async (file) => {
 
@@ -30,13 +33,11 @@ const uploadResume = async (file) => {
 
     setLoading(true);
 
-    const response = await fetch(
-      "https://hiremeai-backend-mm0t.onrender.com/upload-resume",
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
+    const response = await fetch(`${API_URL}/upload-resume`, {
+  method: "POST",
+  body: formData,
+});
+
 
     const data = await response.json();
 
@@ -84,18 +85,16 @@ const loadSuggestedQuestions = async (id = sessionId) => {
   try {
     setLoadingQuestions(true);
 
-    const response = await fetch(
-      `https://hiremeai-backend-mm0t.onrender.com/interview-questions?session_id=${id}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mode: interviewMode,
-        }),
-      }
-    );
+    const response = await fetch(`${API_URL}/interview-questions?session_id=${id}`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    mode: interviewMode,
+  }),
+});
+
 
     const data = await response.json();
 
@@ -165,7 +164,7 @@ function App() {
   useEffect(() => {
   async function checkBackend() {
     try {
-      const response = await fetch("https://hiremeai-backend-mm0t.onrender.com/");
+    const response = await fetch(`${API_URL}/`);
 
       setBackendOnline(response.ok);
     } catch (error) {
@@ -187,7 +186,7 @@ function App() {
       setCandidateLoading(true);
       setCandidateError(false);
 
-      const response = await fetch("https://hiremeai-backend-mm0t.onrender.com/candidate");
+      const response = await fetch(`${API_URL}/candidate`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch candidate");
@@ -226,17 +225,18 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await fetch("https://hiremeai-backend-mm0t.onrender.com/chat", {
+      const response = await fetch(`${API_URL}/chat`, {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
-  question: finalQuestion,
-  history: messages,
-  mode: interviewMode,
-}),
+    question: finalQuestion,
+    history: messages,
+    mode: interviewMode,
+  }),
 });
+
 
       if (!response.ok) {
         throw new Error("Backend request failed");
