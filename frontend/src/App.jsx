@@ -110,90 +110,101 @@ useEffect(() => {
 
 function App() {
   const [interviewMode, setInterviewMode] = useState("HR Interview");
-  const [interviewStarted, setInterviewStarted] = useState(false);
   const [sessionId, setSessionId] = useState(null);
-  const [interviewQuestions, setInterviewQuestions] = useState([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [candidate, setCandidate] = useState(null);
-  const [candidateLoading, setCandidateLoading] = useState(true);
-  const [candidateError, setCandidateError] = useState(false);  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
-  const [backendOnline, setBackendOnline] = useState(false);
-
-  
-
-     
-
- 
-
+  const [candidate, setCandidate] = useState(null);
+  const [candidateLoading, setCandidateLoading] = useState(true);
+  const [candidateError, setCandidateError] = useState(false);
   const [messages, setMessages] = useState([
-    {
-      id: 1,
-      role: "assistant",
-      content:
-        "Hello! I'm HireMe AI. Ask me anything about the candidate's experience, projects, skills, education, or background.",
-    },
+    { id: 1, role: "assistant", content: "Hello! I'm HireMe AI..." },
   ]);
-
   const [question, setQuestion] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [backendOnline, setBackendOnline] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
-
   const chatEndRef = useRef(null);
 
-  // Scroll to latest message
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [messages, loading]);
-
-
-  useEffect(() => {
-  async function checkBackend() {
+  // ✅ uploadResume now inside App
+  const uploadResume = async (file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
     try {
-    const response = await fetch(`${API_URL}/`);
-
-      setBackendOnline(response.ok);
-    } catch (error) {
-      setBackendOnline(false);
-    }
-  }
-
-  checkBackend();
-
-  const interval = setInterval(checkBackend, 10000);
-
-  return () => clearInterval(interval);
-}, []);
-
-  // Fetch  information
- useEffect(() => {
-  async function fetchCandidate() {
-    try {
-      setCandidateLoading(true);
-      setCandidateError(false);
-
-      const response = await fetch(`${API_URL}/candidate`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch candidate");
-      }
-
+      setLoading(true);
+      const response = await fetch(`${API_URL}/upload-resume`, {
+        method: "POST",
+        body: formData,
+      });
       const data = await response.json();
-
-      setCandidate(data);
+      if (!response.ok) throw new Error(data.detail || "Resume upload failed");
+      setSessionId(data.session_id);
+      await loadSuggestedQuestions(data.session_id);
     } catch (error) {
-      console.error("Could not load candidate:", error);
-      setCandidateError(true);
+      console.error("Resume upload error:", error);
     } finally {
-      setCandidateLoading(false);
+      setLoading(false);
     }
-  }
+  };
 
-  fetchCandidate();
-}, []);
+  // ✅ loadSuggestedQuestions inside App
+  const loadSuggestedQuestions = async (id = sessionId) => {
+    if (!id) return;
+    try {
+      setLoadingQuestions(true);
+      const response = await fetch(`${API_URL}/interview-questions?session_id=${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: interviewMode }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Failed to generate questions");
+      setSuggestedQuestions(data.questions || []);
+    } catch (error) {
+      console.error("Question generation error:", error);
+      setSuggestedQuestions([]);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
+  // ✅ useEffects inside App
+  useEffect(() => {
+    if (sessionId) loadSuggestedQuestions(sessionId);
+  }, [interviewMode, sessionId]);
+
+  useEffect(() => {
+    async function checkBackend() {
+      try {
+        const response = await fetch(`${API_URL}/`);
+        setBackendOnline(response.ok);
+      } catch {
+        setBackendOnline(false);
+      }
+    }
+    checkBackend();
+    const interval = setInterval(checkBackend, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    async function fetchCandidate() {
+      try {
+        setCandidateLoading(true);
+        setCandidateError(false);
+        const response = await fetch(`${API_URL}/candidate`);
+        if (!response.ok) throw new Error("Failed to fetch candidate");
+        const data = await response.json();
+        setCandidate(data);
+      } catch (error) {
+        console.error("Could not load candidate:", error);
+        setCandidateError(true);
+      } finally {
+        setCandidateLoading(false);
+      }
+    }
+    fetchCandidate();
+  }, []);
 
   // Ask question to backend
   async function askQuestion(customQuestion) {
