@@ -17,8 +17,8 @@ import {
 
 import "./App.css";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 function App() {
   const [interviewMode, setInterviewMode] = useState("HR Interview");
   const [interviewStarted, setInterviewStarted] = useState(false);
@@ -194,32 +194,7 @@ function App() {
   // Fetch Candidate
   // --------------------------------------------------
 
-  useEffect(() => {
-    async function fetchCandidate() {
-      try {
-        setCandidateLoading(true);
-        setCandidateError(false);
-
-        const response = await fetch(`${API_URL}/candidate`);
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch candidate");
-        }
-
-        const data = await response.json();
-
-        setCandidate(data);
-
-      } catch (error) {
-        console.error("Could not load candidate:", error);
-        setCandidateError(true);
-      } finally {
-        setCandidateLoading(false);
-      }
-    }
-
-    fetchCandidate();
-  }, []);
+  
 
   // --------------------------------------------------
   // Ask Question
@@ -228,9 +203,9 @@ function App() {
   async function askQuestion(customQuestion) {
     const finalQuestion = (customQuestion ?? question).trim();
 
-    if (!finalQuestion || loading) {
-      return;
-    }
+    if (!finalQuestion || loading || !sessionId) {
+  return;
+}
 
     const userMessage = {
       id: Date.now(),
@@ -247,17 +222,20 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question: finalQuestion,
-          history: messages,
-          mode: interviewMode,
-        }),
-      });
+      const response = await fetch(
+  `${API_URL}/chat?session_id=${encodeURIComponent(sessionId)}`,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      question: finalQuestion,
+      history: messages,
+      mode: interviewMode,
+    }),
+  }
+);
 
       if (!response.ok) {
         throw new Error("Backend request failed");

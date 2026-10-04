@@ -1,7 +1,8 @@
 import json
 import os
-from pathlib import Path
+import tempfile
 import uuid
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -11,37 +12,51 @@ from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 
-# --------------------------------------------------
+# ==================================================
 # ENVIRONMENT
-# --------------------------------------------------
+# ==================================================
 
 load_dotenv()
 
-client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    raise RuntimeError(
+        "GROQ_API_KEY is missing. Add it to your .env file."
+    )
+
+client = Groq(api_key=GROQ_API_KEY)
+
+MODEL = "openai/gpt-oss-120b"
+
+
+# ==================================================
+# FASTAPI APP
+# ==================================================
+
+app = FastAPI(
+    title="HireMe AI",
+    description="AI Candidate Interview Assistant",
+    version="1.0.0",
 )
 
-model = "openai/gpt-oss-120b"
 
-app = FastAPI()
-
-
-# --------------------------------------------------
+# ==================================================
 # CORS
-# --------------------------------------------------
+# ==================================================
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # later replace * with your Vercel domain
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # RESUME MODELS
-# --------------------------------------------------
+# ==================================================
 
 class Experience(BaseModel):
     company: str | None = None
@@ -68,9 +83,9 @@ class Resume(BaseModel):
 resume_schema = Resume.model_json_schema()
 
 
-# --------------------------------------------------
+# ==================================================
 # CHAT MODELS
-# --------------------------------------------------
+# ==================================================
 
 class ChatMessage(BaseModel):
     role: str
@@ -83,23 +98,33 @@ class ChatRequest(BaseModel):
     mode: str = "HR Interview"
 
 
-# --------------------------------------------------
+# ==================================================
 # INTERVIEW QUESTION MODEL
-# --------------------------------------------------
+# ==================================================
 
 class QuestionRequest(BaseModel):
     mode: str = "HR Interview"
 
 
-# --------------------------------------------------
+# ==================================================
+# SESSION STORAGE
+# ==================================================
+
+# Stores:
+# session_id -> parsed Resume
+
+sessions: dict[str, Resume] = {}
+
+
+# ==================================================
 # AI CANDIDATE CHAT
-# --------------------------------------------------
+# ==================================================
 
 def ask_candidate(
     question: str,
     resume: Resume,
     history: list[ChatMessage],
-    mode: str
+    mode: str,
 ):
 
     mode_instructions = {
@@ -152,7 +177,6 @@ Questions should be answered using:
 - skills
 - projects
 - certifications
-- achievements
 
 Do not add information that is not present in the resume.
 """
@@ -160,7 +184,7 @@ Do not add information that is not present in the resume.
 
     selected_mode_instruction = mode_instructions.get(
         mode,
-        mode_instructions["HR Interview"]
+        mode_instructions["HR Interview"],
     )
 
     system_prompt = f"""
@@ -205,7 +229,7 @@ RULES:
 9. Be professional and confident, but do not exaggerate
    the candidate's experience.
 
-10. Use the previous conversation to understand references
+10. Use previous conversation to understand references
     such as:
     - "there"
     - "that project"
@@ -214,54 +238,60 @@ RULES:
 
 11. Do not mention that you are an AI unless the user
     specifically asks.
-    """
-
-    # Build conversation messages
+"""
 
     messages = [
         {
             "role": "system",
-            "content": system_prompt
+            "content": system_prompt,
         }
     ]
 
-    # Add previous conversation
-
+    # Add conversation history
     for message in history:
+
+        # Only allow valid Groq chat roles
+        role = message.role
+
+        if role not in {"user", "assistant", "system"}:
+            role = "user"
 
         messages.append(
             {
-                "role": message.role,
-                "content": message.content
+                "role": role,
+                "content": message.content,
             }
         )
 
     # Add current question
-
     messages.append(
         {
             "role": "user",
-            "content": question
+            "content": question,
         }
     )
 
     # Call Groq
-
     response = client.chat.completions.create(
-        model=model,
-        messages=messages
+        model=MODEL,
+        messages=messages,
     )
 
-    return response.choices[0].message.content
+    answer = response.choices[0].message.content
+
+    if not answer:
+        return "I don't have enough information to answer that."
+
+    return answer
 
 
-# --------------------------------------------------
+# ==================================================
 # GENERATE INTERVIEW QUESTIONS
-# --------------------------------------------------
+# ==================================================
 
 def generate_interview_questions(
     mode: str,
-    resume: Resume
+    resume: Resume,
 ):
 
     prompt = f"""
@@ -315,30 +345,41 @@ Example:
 """
 
     response = client.chat.completions.create(
-        model=model,
+        model=MODEL,
         messages=[
             {
                 "role": "system",
-                "content": prompt
+                "content": prompt,
             }
         ],
         response_format={
-            "type": "json_object"
-        }
+            "type": "json_object",
+        },
     )
 
     raw_output = response.choices[0].message.content
 
-    data = json.loads(raw_output)
+    if not raw_output:
+        return []
 
-    return data.get("questions", [])
+    try:
+        data = json.loads(raw_output)
+    except json.JSONDecodeError:
+        return []
+
+    questions = data.get("questions", [])
+
+    if not isinstance(questions, list):
+        return []
+
+    return questions[:5]
 
 
-# --------------------------------------------------
+# ==================================================
 # RESUME PARSER
-# --------------------------------------------------
+# ==================================================
 
-def parse_resume(resume_text):
+def parse_resume(resume_text: str) -> Resume:
 
     system_prompt = f"""
 You are an expert resume parser.
@@ -366,7 +407,7 @@ Skills may also appear in:
 
 Return ONLY valid JSON matching this schema:
 
-{resume_schema}
+{json.dumps(resume_schema, indent=2)}
 
 Important rules:
 
@@ -387,39 +428,43 @@ Parse the following resume:
 {resume_text}
 """
 
-    messages = [
-        {
-            "role": "system",
-            "content": system_prompt
-        },
-        {
-            "role": "user",
-            "content": user_prompt
-        }
-    ]
-
     response = client.chat.completions.create(
-        model=model,
-        messages=messages,
+        model=MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt,
+            },
+        ],
         response_format={
-            "type": "json_object"
-        }
+            "type": "json_object",
+        },
     )
 
     raw_output = response.choices[0].message.content
 
-    data = json.loads(raw_output)
+    if not raw_output:
+        raise ValueError("AI returned an empty resume response.")
 
-    resume = Resume(**data)
+    try:
+        data = json.loads(raw_output)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"AI returned invalid JSON: {error}"
+        )
 
-    return resume
+    return Resume(**data)
 
 
-# --------------------------------------------------
+# ==================================================
 # PDF EXTRACTION
-# --------------------------------------------------
+# ==================================================
 
-def read_pdf(file_path: Path):
+def read_pdf(file_path: Path) -> str:
 
     reader = PdfReader(file_path)
 
@@ -432,48 +477,80 @@ def read_pdf(file_path: Path):
         if page_text:
             text += page_text + "\n"
 
-    return text
+    return text.strip()
 
 
+# ==================================================
+# HOME / HEALTH CHECK
+# ==================================================
+
+@app.get("/")
+def home():
+
+    return {
+        "message": "HireMe AI backend is running",
+        "status": "online",
+    }
 
 
-
-# --------------------------------------------------
-# GLOBAL RESUME
-# --------------------------------------------------
-
-# Store resumes separately for each HR session
-sessions = {}
-
+# ==================================================
+# UPLOAD RESUME
+# ==================================================
 
 @app.post("/upload-resume")
-async def upload_resume(file: UploadFile = File(...)):
+async def upload_resume(
+    file: UploadFile = File(...)
+):
 
-    global resume
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="No file selected.",
+        )
 
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
-            detail="Only PDF resumes are supported."
+            detail="Only PDF resumes are supported.",
         )
 
     contents = await file.read()
 
-    temp_path = Path("uploaded_resume.pdf")
-    temp_path.write_bytes(contents)
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded PDF is empty.",
+        )
+
+    temp_path = None
 
     try:
+
+        # Create a unique temporary PDF
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=".pdf",
+        ) as temp_file:
+
+            temp_file.write(contents)
+            temp_path = Path(temp_file.name)
+
+        # Extract PDF text
         resume_text = read_pdf(temp_path)
 
-        if not resume_text.strip():
+        if not resume_text:
             raise HTTPException(
                 status_code=400,
-                detail="Could not extract text from the PDF."
+                detail=(
+                    "Could not extract text from the PDF. "
+                    "Make sure the PDF contains selectable text."
+                ),
             )
 
+        # Parse resume with AI
         parsed_resume = parse_resume(resume_text)
 
-        # Create a unique session for this HR
+        # Create unique session
         session_id = str(uuid.uuid4())
 
         sessions[session_id] = parsed_resume
@@ -481,93 +558,123 @@ async def upload_resume(file: UploadFile = File(...)):
         return {
             "message": "Resume uploaded successfully",
             "session_id": session_id,
-            "candidate": parsed_resume.model_dump()
+            "candidate": parsed_resume.model_dump(),
         }
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+
+        print("Resume upload error:", error)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Resume processing failed: {str(error)}",
+        )
 
     finally:
 
-        if temp_path.exists():
+        if temp_path and temp_path.exists():
             temp_path.unlink()
 
 
-# --------------------------------------------------
-# HOME
-# --------------------------------------------------
-
-@app.get("/")
-def home():
-
-    return {
-        "message": "Ye home page hai"
-    }
-
-
-# --------------------------------------------------
+# ==================================================
 # GET CANDIDATE
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/candidate")
-def get_candidate(session_id: str):
+def get_candidate(
+    session_id: str,
+):
 
     if session_id not in sessions:
+
         raise HTTPException(
             status_code=404,
-            detail="Session not found. Please upload a resume."
+            detail="Session not found. Please upload a resume.",
         )
 
     return sessions[session_id].model_dump()
 
 
-# --------------------------------------------------
+# ==================================================
 # CHAT
-# --------------------------------------------------
+# ==================================================
 
 @app.post("/chat")
-def chat(request: ChatRequest, session_id: str):
+def chat(
+    request: ChatRequest,
+    session_id: str,
+):
 
     if session_id not in sessions:
+
         raise HTTPException(
             status_code=404,
-            detail="Session not found. Please upload a resume."
+            detail="Session not found. Please upload a resume.",
         )
 
     candidate_resume = sessions[session_id]
 
-    answer = ask_candidate(
-        request.question,
-        candidate_resume,
-        request.history,
-        request.mode
-    )
+    try:
 
-    return {
-        "answer": answer
-    }
+        answer = ask_candidate(
+            question=request.question,
+            resume=candidate_resume,
+            history=request.history,
+            mode=request.mode,
+        )
+
+        return {
+            "answer": answer,
+        }
+
+    except Exception as error:
+
+        print("Chat error:", error)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI response failed: {str(error)}",
+        )
 
 
-# --------------------------------------------------
+# ==================================================
 # INTERVIEW QUESTIONS
-# --------------------------------------------------
+# ==================================================
 
 @app.post("/interview-questions")
 def interview_questions(
     request: QuestionRequest,
-    session_id: str
+    session_id: str,
 ):
 
     if session_id not in sessions:
+
         raise HTTPException(
             status_code=404,
-            detail="Session not found. Please upload a resume."
+            detail="Session not found. Please upload a resume.",
         )
 
     candidate_resume = sessions[session_id]
 
-    questions = generate_interview_questions(
-        request.mode,
-        candidate_resume
-    )
+    try:
 
-    return {
-        "questions": questions
-    }
+        questions = generate_interview_questions(
+            mode=request.mode,
+            resume=candidate_resume,
+        )
+
+        return {
+            "questions": questions,
+        }
+
+    except Exception as error:
+
+        print("Question generation error:", error)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Question generation failed: {str(error)}",
+        )
