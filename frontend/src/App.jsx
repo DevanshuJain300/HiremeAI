@@ -315,7 +315,7 @@ function App() {
   return (
     <div className="app-background">
       <div className="glow glow-blue" />
-      <div className="glow glow-purple" />
+      <div className="glow glow-indigo" />
 
       {/* NAVBAR */}
 
@@ -324,16 +324,16 @@ function App() {
 
           <div className="flex items-center gap-3">
 
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 shadow-lg shadow-blue-500/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 shadow-lg shadow-blue-500/20">
               <Bot size={22} />
             </div>
 
             <div>
               <h1 className="text-lg font-bold tracking-tight">
-                HireMe <span className="text-blue-400">AI</span>
-              </h1>
+  HireMe <span className="text-blue-400">AI</span>
+</h1>
 
-              <p className="hidden text-xs text-slate-500 sm:block">
+              <p className="hidden text-base text-slate-300 sm:block">
                 AI Candidate Interview Assistant
               </p>
             </div>
@@ -394,27 +394,29 @@ function App() {
             Intelligent Resume-Based Interviews
           </div>
 
-          <h2 className="text-4xl font-black tracking-tight text-white sm:text-6xl">
-            Meet the candidate's
+          <h2 className="hero-title font-black tracking-tight">
+  Meet the candidate's
 
-            <span className="block bg-gradient-to-r from-blue-400 via-violet-400 to-purple-400 bg-clip-text text-transparent">
-              AI interview assistant.
-            </span>
-          </h2>
+  <span className="hero-title-gradient block">
+    AI interview assistant.
+  </span>
+</h2>
 
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
-            Ask questions about the candidate's experience, projects,
-            skills, education and background. HireMe AI answers using
-            information from the candidate's resume.
-          </p>
+          <p className="hero-subtitle mx-auto mt-5 max-w-2xl leading-7">
+  Ask questions about the candidate's experience, projects,
+  skills, education and background. HireMe AI answers using
+  information from the candidate's resume.
+</p>
 
-        </motion.section>
+
+</motion.section>
+
 
         {/* UPLOAD RESUME */}
 
         <div className="mx-auto mb-6 mt-8 max-w-4xl">
 
-          <label className="mb-2 block text-sm font-medium text-slate-300">
+          <label className="section-heading mb-2 block font-medium">
             Upload Candidate Resume
           </label>
 
@@ -459,19 +461,21 @@ function App() {
         )}
 
         {candidate && !candidateLoading && !candidateError && (
-          <div className="mx-auto mt-8 max-w-4xl">
-            <CandidateCard candidate={candidate} />
-          </div>
-        )}
+  <div className="mx-auto mt-8 max-w-4xl">
+    <h3 className="section-heading">Candidate Profile</h3>
+    <CandidateCard candidate={candidate} />
+  </div>
+)}
+
 
         {/* INTERVIEW MODE */}
 
         {candidate && (
           <div className="mx-auto mt-8 max-w-4xl">
 
-            <label className="mb-2 block text-sm font-medium text-slate-300">
-              Interview Mode
-            </label>
+            <label className="section-heading mb-2 block font-medium">
+  Interview Mode
+</label>
 
             <select
               value={interviewMode}
@@ -503,7 +507,7 @@ function App() {
         {candidate && (
           <div className="mx-auto mt-6 max-w-4xl">
 
-            <h3 className="mb-3 text-sm font-semibold text-white">
+            <h3 className="section-heading mb-3">
               Suggested Questions
             </h3>
 
@@ -520,7 +524,7 @@ function App() {
                   <button
                     key={index}
                     onClick={() => askQuestion(item)}
-                    className="rounded-lg border border-white/10 bg-white/5 p-3 text-left text-sm text-slate-300 transition hover:border-blue-400/30 hover:bg-blue-400/10"
+                    className="rounded-lg border border-indigo-400/20 bg-indigo-950/20 p-3 text-left text-sm text-blue-100 transition hover:border-emerald-400/30 hover:bg-emerald-400/10"
                   >
                     {item}
                   </button>
@@ -557,16 +561,16 @@ function App() {
 
               <div className="flex items-center gap-3">
 
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-700">
                   <Bot size={17} />
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-white">
+                  <h3 className="section-heading">
                     HireMe AI
                   </h3>
 
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xm text-slate-300">
                     {interviewMode}
                   </p>
                 </div>
@@ -635,27 +639,34 @@ function App() {
 
         {/* FEATURES */}
 
-        <section className="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
+<section className="mx-auto mt-10 max-w-4xl">
 
-          <Feature
-            icon={CheckCircle2}
-            title="Resume Grounded"
-            description="Answers are based on the candidate's resume."
-          />
+  <h2 className="section-heading mb-6 text-center">
+    Features
+  </h2>
 
-          <Feature
-            icon={Sparkles}
-            title="AI Powered"
-            description="Powered by a modern large language model."
-          />
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <Feature
+      icon={CheckCircle2}
+      title="Resume Grounded"
+      description="Answers are based on the candidate's resume."
+    />
 
-          <Feature
-            icon={BriefcaseBusiness}
-            title="Recruiter Ready"
-            description="Designed around real interview questions."
-          />
+    <Feature
+      icon={Sparkles}
+      title="AI Powered"
+      description="Powered by a modern large language model."
+    />
 
-        </section>
+    <Feature
+      icon={BriefcaseBusiness}
+      title="Recruiter Ready"
+      description="Designed around real interview questions."
+    />
+  </div>
+
+</section>
+
 
         {/* FOOTER */}
 
@@ -692,7 +703,7 @@ function Message({ message }) {
     >
 
       {!isUser && (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-700">
           <Bot size={17} />
         </div>
       )}
@@ -780,7 +791,7 @@ function TypingIndicator() {
   return (
     <div className="flex gap-3">
 
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-700">
         <Bot size={17} />
       </div>
 
@@ -788,9 +799,9 @@ function TypingIndicator() {
 
         <span className="h-2 w-2 animate-bounce rounded-full bg-blue-400 [animation-delay:-0.3s]" />
 
-        <span className="h-2 w-2 animate-bounce rounded-full bg-violet-400 [animation-delay:-0.15s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:-0.15s]" />
 
-        <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" /> 
 
       </div>
 
@@ -814,11 +825,11 @@ function Feature({ icon: Icon, title, description }) {
         <Icon size={18} />
       </div>
 
-      <h3 className="text-sm font-semibold text-white">
+      <h3 className="section-heading">
         {title}
       </h3>
 
-      <p className="mt-1 text-xs leading-5 text-slate-500">
+      <p className="mt-1 text-xm leading-5 text-slate-400">
         {description}
       </p>
 
